@@ -29,23 +29,33 @@ class AmharicPDFReaderApp(App):
 
     def build(self):
         self.layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        self.status_label = Label(text="Select your Amharic PDF", size_hint=(1, 0.3))
-        self.select_button = Button(text="Choose PDF", on_press=self.choose_file, size_hint=(1, 0.15))
-        self.play_button = Button(text="Play Page", on_press=self.play_audio, disabled=True, size_hint=(1, 0.15))
-        self.pause_button = Button(text="Pause", on_press=self.pause_audio, disabled=True, size_hint=(1, 0.15))
-        self.next_page_button = Button(text="Next Page", on_press=self.next_page, disabled=True, size_hint=(1, 0.15))
-        self.prev_page_button = Button(text="Previous Page", on_press=self.prev_page, disabled=True, size_hint=(1, 0.15))
-        self.speed_slider = Slider(min=0.5, max=2.0, value=1.0, step=0.1, size_hint=(1, 0.1))
-        self.speed_label = Label(text="Speed: 1.0x", size_hint=(1, 0.1))
-        self.progress_label = Label(text="Page 0 of 0", size_hint=(1, 0.1))
+        self.status_label = Label(text="Select your Amharic PDF", size_hint=(1, 0.2))
+        self.select_button = Button(text="Choose PDF", on_press=self.choose_file, size_hint=(1, 0.1))
         
+        # Audio control buttons in a horizontal layout
+        audio_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.1), spacing=5)
+        self.play_button = Button(text="▶ Play Page", on_press=self.play_audio, disabled=True)
+        self.pause_button = Button(text="⏸ Pause", on_press=self.pause_audio, disabled=True)
+        audio_layout.add_widget(self.play_button)
+        audio_layout.add_widget(self.pause_button)
+        
+        # Navigation buttons in a horizontal layout  
+        nav_layout = BoxLayout(orientation='horizontal', size_hint=(1, 0.1), spacing=5)
+        self.prev_page_button = Button(text="◀ Previous", on_press=self.prev_page, disabled=True)
+        self.next_page_button = Button(text="Next ▶", on_press=self.next_page, disabled=True)
+        nav_layout.add_widget(self.prev_page_button)
+        nav_layout.add_widget(self.next_page_button)
+        
+        self.speed_slider = Slider(min=0.5, max=2.0, value=1.0, step=0.1, size_hint=(1, 0.08))
+        self.speed_label = Label(text="Speed: 1.0x", size_hint=(1, 0.08))
+        self.progress_label = Label(text="Page 0 of 0", size_hint=(1, 0.08))
+        
+        # Add all widgets to main layout
         self.layout.add_widget(self.status_label)
         self.layout.add_widget(self.select_button)
-        self.layout.add_widget(self.play_button)
-        self.layout.add_widget(self.pause_button)
-        self.layout.add_widget(self.prev_page_button)
-        self.layout.add_widget(self.next_page_button)
-        self.layout.add_widget(Label(text="Adjust Speed", size_hint=(1, 0.1)))
+        self.layout.add_widget(audio_layout)
+        self.layout.add_widget(nav_layout)
+        self.layout.add_widget(Label(text="Adjust Speed", size_hint=(1, 0.06)))
         self.layout.add_widget(self.speed_slider)
         self.layout.add_widget(self.speed_label)
         self.layout.add_widget(self.progress_label)
@@ -74,6 +84,8 @@ class AmharicPDFReaderApp(App):
         self.pages = []
         self.current_page = 0
         self.total_pages = 0
+        
+        # Reset button states - keep them visible but disabled during processing
         self.play_button.disabled = True
         self.pause_button.disabled = True
         self.next_page_button.disabled = True
@@ -86,8 +98,7 @@ class AmharicPDFReaderApp(App):
                 self.pages = [page.extract_text() or "" for page in reader.pages]
                 if any(page.strip() for page in self.pages):
                     self.status_label.text = "Text extracted. Ready to play."
-                    self.play_button.disabled = False
-                    self.update_page_navigation()
+                    self.enable_pdf_controls()
                     return
         except Exception as e:
             logger.error(f"Text extraction failed: {str(e)}")
@@ -106,8 +117,7 @@ class AmharicPDFReaderApp(App):
                 self.status_label.text = f"OCR: Processing page {i + 1}/{self.total_pages}"
             if any(page.strip() for page in self.pages):
                 self.status_label.text = "OCR completed. Ready to play."
-                self.play_button.disabled = False
-                self.update_page_navigation()
+                self.enable_pdf_controls()
             else:
                 self.status_label.text = "No Amharic text extracted. Check PDF quality."
                 self.play_button.disabled = True
@@ -115,6 +125,12 @@ class AmharicPDFReaderApp(App):
             logger.error(f"OCR failed: {str(e)}")
             self.status_label.text = f"OCR failed: Check PDF quality or scan clarity."
             self.play_button.disabled = True
+
+    def enable_pdf_controls(self):
+        """Enable controls when PDF is successfully loaded"""
+        self.play_button.disabled = False
+        self.pause_button.disabled = True  # Only enable when audio is playing
+        self.update_page_navigation()
 
     def update_page_navigation(self):
         self.progress_label.text = f"Page {self.current_page + 1} of {self.total_pages}"
@@ -140,6 +156,7 @@ class AmharicPDFReaderApp(App):
             self.status_label.text = f"No text on page {self.current_page + 1}!"
             return
         
+        # Update button states for playing
         self.play_button.disabled = True
         self.pause_button.disabled = False
         self.playing = True
@@ -160,11 +177,11 @@ class AmharicPDFReaderApp(App):
                 self.sound.bind(on_stop=self.on_sound_stop)
             else:
                 self.status_label.text = "Error loading audio."
-                self.stop_audio()
+                self.reset_audio_buttons()
         except Exception as e:
             logger.error(f"TTS error: {str(e)}")
             self.status_label.text = f"Error: Check internet or PDF content."
-            self.stop_audio()
+            self.reset_audio_buttons()
 
     def on_sound_stop(self, instance):
         try:
@@ -177,8 +194,7 @@ class AmharicPDFReaderApp(App):
         if self.sound:
             self.sound.stop()
             self.playing = False
-            self.play_button.disabled = False
-            self.pause_button.disabled = True
+            self.reset_audio_buttons()
             self.status_label.text = f"Paused on page {self.current_page + 1}"
 
     def stop_audio(self):
@@ -186,9 +202,13 @@ class AmharicPDFReaderApp(App):
             self.sound.stop()
             self.sound = None
         self.playing = False
+        self.reset_audio_buttons()
+        self.status_label.text = f"Stopped. On page {self.current_page + 1}"
+
+    def reset_audio_buttons(self):
+        """Reset audio buttons to default state (play enabled, pause disabled)"""
         self.play_button.disabled = False
         self.pause_button.disabled = True
-        self.status_label.text = f"Stopped. On page {self.current_page + 1}"
 
 if __name__ == '__main':
     AmharicPDFReaderApp().run()
